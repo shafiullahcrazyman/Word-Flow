@@ -243,34 +243,52 @@ const btnNext = document.getElementById('btnNext');
 
 let words = [];
 let index = 0;
-let timeoutId = null;
 
-function setStatus(message, duration = 3000) {
-  clearTimeout(timeoutId);
-  statusBox.textContent = message;
-  timeoutId = setTimeout(() => {
-    statusBox.textContent = "";
-  }, duration);
+function saveState() {
+  localStorage.setItem('words', JSON.stringify(words));
+  localStorage.setItem('index', index);
+}
+
+function loadState() {
+  const savedWords = localStorage.getItem('words');
+  const savedIndex = localStorage.getItem('index');
+  if (savedWords) {
+    words = JSON.parse(savedWords);
+  }
+  if (savedIndex) {
+    index = parseInt(savedIndex, 10);
+  }
+}
+
+function updateStatus() {
+  if (words.length > 0) {
+    statusBox.textContent = `Word ${index + 1} of ${words.length}`;
+  } else {
+    statusBox.textContent = "No words loaded.";
+  }
 }
 
 function showWord() {
   if (!words.length) {
-    wordDisplay.textContent = "Please scan or paste new text.";
+    wordDisplay.textContent = "Please scan or paste text.";
     return;
   }
   wordDisplay.textContent = words[index];
+  updateStatus();
 }
 
 function nextWord() {
   index = (index + 1) % words.length;
   showWord();
   input.value = "";
+  saveState();
 }
 
 function prevWord() {
   index = (index - 1 + words.length) % words.length;
   showWord();
   input.value = "";
+  saveState();
 }
 
 input.addEventListener("input", () => {
@@ -308,41 +326,43 @@ document.getElementById("btnCamera").onclick = async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = stream;
-    setStatus("Please tap 'Scan' to begin.");
+    statusBox.textContent = "Tap 'Scan' to begin.";
   } catch {
-    setStatus("Switch to HTTPS for camera.");
+    statusBox.textContent = "Switch to HTTPS for camera.";
   }
 };
 
 // Scan text
 document.getElementById("btnScan").onclick = async () => {
   if (!video.srcObject) {
-    setStatus("Please enable the camera first.");
+    statusBox.textContent = "Please enable the camera first.";
     return;
   }
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   ctx.drawImage(video, 0, 0);
-  setStatus("Scanning text...");
+  statusBox.textContent = "Scanning text...";
   try {
     const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-    words = text.split(/\s+/).filter(w => w.length > 2);
+    const cleanText = text.replace(/[.,?!;:()'"]/g, '');
+    words = cleanText.split(/\s+/).filter(w => w.length > 2);
     index = 0;
     if (words.length) {
-      setStatus(`Successfully found ${words.length} words.`);
+      statusBox.textContent = `Found ${words.length} words.`;
       showWord();
+      saveState();
     } else {
-      setStatus("No words were detected. Please try again.");
+      statusBox.textContent = "No words were detected. Please try again.";
     }
   } catch {
-    setStatus("Text recognition failed. Please try again.");
+    statusBox.textContent = "Text recognition failed. Please try again.";
   }
 };
 
 // Shuffle
 document.getElementById("btnShuffle").onclick = () => {
   if (!words.length) {
-    setStatus("No words to shuffle. Please load words first.");
+    statusBox.textContent = "No words to shuffle. Please load words first.";
     return;
   }
   for (let i = words.length - 1; i > 0; i--) {
@@ -351,7 +371,8 @@ document.getElementById("btnShuffle").onclick = () => {
   }
   index = 0;
   showWord();
-  setStatus("Words have been shuffled.");
+  saveState();
+  statusBox.textContent = "Words have been shuffled.";
 };
 
 // Paste text (open modal)
@@ -363,13 +384,13 @@ document.getElementById("btnPaste").onclick = () => {
 // Use pasted text
 document.getElementById("btnUsePasted").onclick = () => {
   const text = document.getElementById("pasteText").value;
-  // Remove punctuation and split by whitespace
   const cleanText = text.replace(/[.,?!;:()'"]/g, '');
   words = cleanText.split(/\s+/).filter(w => w.length > 2);
   index = 0;
   showWord();
   pasteModal.style.display = "none";
-  setStatus(`Successfully loaded ${words.length} words.`);
+  saveState();
+  updateStatus();
 };
 
 // Close modal when clicking outside
@@ -383,13 +404,20 @@ pasteModal.onclick = (e) => {
 document.getElementById("btnClear").onclick = () => {
   words = [];
   index = 0;
+  localStorage.removeItem('words');
+  localStorage.removeItem('index');
   showWord();
-  setStatus("All words have been cleared.");
+  statusBox.textContent = "All words have been cleared.";
 };
 
 // Initial state
+loadState();
 showWord();
-setStatus("Ready. Scan or paste text to begin.");
+if (words.length > 0) {
+  updateStatus();
+} else {
+  statusBox.textContent = "Ready. Scan or paste text to begin.";
+}
 </script>
 </body>
 </html>
