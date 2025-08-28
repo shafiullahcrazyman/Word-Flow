@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
+<title>Word Flow by Shafiullah</title>
+
+<link rel="manifest" href="manifest.json">
+
+<link rel="apple-touch-icon" href="icon.png">
+
+<link rel="icon" href="icon.png">
+
+<meta name="theme-color" content="#2b2f8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Web App">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
+<style>
+  :root {
+    --bg: #1e1932;
+    --fg: #f0f0f0;
+    --muted: #a0a0a0;
+    --accent: #ff4081;
+    --ok: #4caf50;
+    --error: #f44336;
+    --gradient-start: #ff4081; /* Pink */
+    --gradient-end: #ff8c00;   /* Orange */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  /* top toolbar */
+  #toolbar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    padding: 10px;
+    background: #282840;
+    border-bottom: 1px solid #4a4a6e;
+    flex-shrink: 0;
+  }
+  #toolbar button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 24px;
+    transition: all 0.2s ease;
+  }
+  #toolbar button i {
+    background-image: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  #toolbar button:active {
+    transform: scale(0.9);
+  }
+  #status {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 6px 0;
+    text-align: center;
+    padding: 0 10px;
+  }
+  /* big word area */
+  #wordBox {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    color: var(--fg);
+  }
+  #wordBox span.correct {
+    color: var(--ok);
+  }
+  #wordBox span.wrong {
+    color: var(--error);
+  }
+  /* typing dock */
+  #dock {
+    display: flex;
+    padding: 10px;
+    background: #282840;
+    width: 100%;
+    border-top: 1px solid #4a4a6e;
+    flex-shrink: 0;
+  }
+  #typeInput {
+    flex: 1;
+    padding: 12px;
+    font-size: 18px;
+    border-radius: 10px;
+    border: none;
+    outline: none;
+    background: #3a3a5a;
+    color: var(--fg);
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  #typeInput:focus {
+    background: #4a4a6e;
+    box-shadow: inset 0 0 8px var(--accent);
+  }
+  /* paste modal */
+  #pasteModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  #pasteBox {
+    background: #282840;
+    padding: 25px;
+    border-radius: 15px;
+    width: 90%;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  }
+  #pasteText {
+    width: 100%;
+    min-height: 180px;
+    border-radius: 10px;
+    background: #3a3a5a;
+    color: var(--fg);
+    border: 1px solid #4a4a6e;
+    padding: 15px;
+    font-size: 16px;
+    resize: vertical;
+  }
+  #pasteBox button {
+    background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+    border: none;
+    color: #fff;
+    padding: 12px;
+    font-size: 18px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+  }
+  #pasteBox button:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+  }
+  #pasteBox button:active {
+    opacity: 0.8;
+    transform: translateY(0);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  }
+  video, canvas { display: none; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="btnCamera" title="Enable Camera"><i class="fa-solid fa-camera"></i></button>
+  <button id="btnScan" title="Scan Text"><i class="fa-solid fa-qrcode"></i></button>
+  <button id="btnShuffle" title="Shuffle Words"><i class="fa-solid fa-shuffle"></i></button>
+  <button id="btnPaste" title="Paste Text"><i class="fa-solid fa-clipboard"></i></button>
+  <button id="btnClear" title="Clear"><i class="fa-solid fa-trash"></i></button>
+</div>
+
+<div id="status"></div>
+<div id="wordBox"></div>
+
+<div id="dock">
+  <input id="typeInput" placeholder="Type here…" autocomplete="off" spellcheck="false">
+</div>
+
+<div id="pasteModal">
+  <div id="pasteBox">
+    <textarea id="pasteText" placeholder="Paste or type text here…"></textarea>
+    <button id="btnUsePasted">Use Text</button>
+  </div>
+</div>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const wordBox = document.getElementById('wordBox');
+const input = document.getElementById('typeInput');
+const statusBox = document.getElementById('status');
+const pasteModal = document.getElementById('pasteModal');
+
+let words = [];
+let index = 0;
+let timeoutId = null;
+
+function setStatus(message, duration = 3000) {
+  clearTimeout(timeoutId);
+  statusBox.textContent = message;
+  timeoutId = setTimeout(() => {
+    statusBox.textContent = "";
+  }, duration);
+}
+
+function showWord() {
+  if (!words.length) {
+    wordBox.textContent = "Please scan or paste text.";
+    return;
+  }
+  wordBox.textContent = words[index];
+}
+
+function nextWord() {
+  index = (index + 1) % words.length;
+  showWord();
+}
+
+input.addEventListener("input", () => {
+  if (!words.length) return;
+  const target = words[index];
+  const typed = input.value;
+
+  const targetLower = target.toLowerCase();
+  const typedLower = typed.toLowerCase();
+
+  let html = "";
+  for (let i = 0; i < target.length; i++) {
+    if (typedLower[i] == null) {
+      html += `<span>${target[i]}</span>`;
+    } else if (typedLower[i] === targetLower[i]) {
+      html += `<span class="correct">${target[i]}</span>`;
+    } else {
+      html += `<span class="wrong">${target[i]}</span>`;
+    }
+  }
+  wordBox.innerHTML = html;
+
+  if (typedLower === targetLower) {
+    input.value = "";
+    nextWord();
+  }
+});
+
+// Enable camera
+document.getElementById("btnCamera").onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    video.srcObject = stream;
+    setStatus("Please tap 'Scan' to begin.");
+  } catch {
+    setStatus("Switch to HTTPS for camera.");
+  }
+};
+
+// Scan text
+document.getElementById("btnScan").onclick = async () => {
+  if (!video.srcObject) {
+    setStatus("Please enable the camera first.");
+    return;
+  }
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+  setStatus("Scanning text...");
+  try {
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+    words = text.split(/\s+/).filter(w => w.length > 2);
+    index = 0;
+    if (words.length) {
+      setStatus(`Successfully found ${words.length} words.`);
+      showWord();
+    } else {
+      setStatus("No words were detected. Please try again.");
+    }
+  } catch {
+    setStatus("Text recognition failed. Please try again.");
+  }
+};
+
+// Shuffle
+document.getElementById("btnShuffle").onclick = () => {
+  if (!words.length) {
+    setStatus("No words to shuffle. Please load words first.");
+    return;
+  }
+  for (let i = words.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [words[i], words[j]] = [words[j], words[i]];
+  }
+  index = 0;
+  showWord();
+  setStatus("Words have been shuffled.");
+};
+
+// Paste text (open modal)
+document.getElementById("btnPaste").onclick = () => {
+  document.getElementById("pasteText").value = "";
+  pasteModal.style.display = "flex";
+};
+
+// Use pasted text
+document.getElementById("btnUsePasted").onclick = () => {
+  const text = document.getElementById("pasteText").value;
+  words = text.split(/\s+/).filter(w => w.length > 2);
+  index = 0;
+  showWord();
+  pasteModal.style.display = "none";
+  setStatus(`Successfully loaded ${words.length} words.`);
+};
+
+// Close modal when clicking outside
+pasteModal.onclick = (e) => {
+  if (e.target === pasteModal) {
+    pasteModal.style.display = "none";
+  }
+};
+
+// Clear
+document.getElementById("btnClear").onclick = () => {
+  words = [];
+  index = 0;
+  showWord();
+  setStatus("All words have been cleared.");
+};
+
+// Initial state
+showWord();
+setStatus("Ready. Scan or paste text to begin.");
+</script>
+</body>
+</html>
