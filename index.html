@@ -76,25 +76,45 @@
     text-align: center;
     padding: 0 10px;
   }
-  /* big word area */
+  /* big word area with nav buttons */
   #wordBox {
     flex-grow: 1;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 48px;
+    padding: 20px;
+  }
+  #wordDisplay {
+    font-size: 30px;
     font-weight: bold;
     text-align: center;
-    padding: 20px;
     white-space: pre-wrap;
     overflow-y: auto;
     color: var(--fg);
   }
-  #wordBox span.correct {
+  #wordDisplay span.correct {
     color: var(--ok);
   }
-  #wordBox span.wrong {
+  #wordDisplay span.wrong {
     color: var(--error);
+  }
+  /* navigation buttons around the word */
+  .nav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 40px; /* Larger size to match the word */
+    transition: all 0.2s ease;
+    padding: 0 15px;
+  }
+  .nav-btn i {
+    background-image: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .nav-btn:active {
+    transform: scale(0.9);
   }
   /* typing dock */
   #dock {
@@ -104,6 +124,7 @@
     width: 100%;
     border-top: 1px solid #4a4a6e;
     flex-shrink: 0;
+    align-items: center;
   }
   #typeInput {
     flex: 1;
@@ -188,7 +209,11 @@
 </div>
 
 <div id="status"></div>
-<div id="wordBox"></div>
+<div id="wordBox">
+  <button id="btnPrev" class="nav-btn"><i class="fa-solid fa-chevron-left"></i></button>
+  <div id="wordDisplay"></div>
+  <button id="btnNext" class="nav-btn"><i class="fa-solid fa-chevron-right"></i></button>
+</div>
 
 <div id="dock">
   <input id="typeInput" placeholder="Type here…" autocomplete="off" spellcheck="false">
@@ -208,10 +233,13 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const wordBox = document.getElementById('wordBox');
+const wordDisplay = document.getElementById('wordDisplay');
 const input = document.getElementById('typeInput');
 const statusBox = document.getElementById('status');
 const pasteModal = document.getElementById('pasteModal');
+
+const btnPrev = document.getElementById('btnPrev');
+const btnNext = document.getElementById('btnNext');
 
 let words = [];
 let index = 0;
@@ -227,15 +255,22 @@ function setStatus(message, duration = 3000) {
 
 function showWord() {
   if (!words.length) {
-    wordBox.textContent = "Please scan or paste text.";
+    wordDisplay.textContent = "Please scan or paste new text.";
     return;
   }
-  wordBox.textContent = words[index];
+  wordDisplay.textContent = words[index];
 }
 
 function nextWord() {
   index = (index + 1) % words.length;
   showWord();
+  input.value = "";
+}
+
+function prevWord() {
+  index = (index - 1 + words.length) % words.length;
+  showWord();
+  input.value = "";
 }
 
 input.addEventListener("input", () => {
@@ -256,13 +291,17 @@ input.addEventListener("input", () => {
       html += `<span class="wrong">${target[i]}</span>`;
     }
   }
-  wordBox.innerHTML = html;
+  wordDisplay.innerHTML = html;
 
   if (typedLower === targetLower) {
     input.value = "";
     nextWord();
   }
 });
+
+// Navigation button handlers
+btnPrev.onclick = prevWord;
+btnNext.onclick = nextWord;
 
 // Enable camera
 document.getElementById("btnCamera").onclick = async () => {
@@ -324,7 +363,9 @@ document.getElementById("btnPaste").onclick = () => {
 // Use pasted text
 document.getElementById("btnUsePasted").onclick = () => {
   const text = document.getElementById("pasteText").value;
-  words = text.split(/\s+/).filter(w => w.length > 2);
+  // Remove punctuation and split by whitespace
+  const cleanText = text.replace(/[.,?!;:()'"]/g, '');
+  words = cleanText.split(/\s+/).filter(w => w.length > 2);
   index = 0;
   showWord();
   pasteModal.style.display = "none";
@@ -352,4 +393,3 @@ setStatus("Ready. Scan or paste text to begin.");
 </script>
 </body>
 </html>
-
