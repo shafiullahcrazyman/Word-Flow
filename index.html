@@ -5,16 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
 <title>Word Flow by Shafiullah</title>
 
-<!-- Manifest for Android/Chrome -->
 <link rel="manifest" href="manifest.json">
 
-<!-- iOS / Safari Home Screen -->
 <link rel="apple-touch-icon" href="icon.png">
 
-<!-- Favicon fallback -->
 <link rel="icon" href="icon.png">
 
-<!-- Theme colors -->
 <meta name="theme-color" content="#2b2f8a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -132,9 +128,9 @@
   }
   #typeInput {
     flex: 1;
-    padding: 12px;
+    padding: 12px 20px;
     font-size: 18px;
-    border-radius: 10px;
+    border-radius: 25px; /* Modern rounded corners */
     border: none;
     outline: none;
     background: #3a3a5a;
@@ -144,8 +140,26 @@
   }
   #typeInput:focus {
     background: #4a4a6e;
-    box-shadow: inset 0 0 8px var(--accent);
+    /* Static gradient glow effect */
+    box-shadow: inset 0 0 8px 4px rgba(255, 64, 129, 0.7), 
+                inset 0 0 12px 6px rgba(255, 140, 0, 0.5);
   }
+  
+  /* Shaking/Vibrating Effect CSS */
+  @keyframes shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
+
+  .shake {
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+  
   /* paste modal */
   #pasteModal {
     position: fixed;
@@ -199,16 +213,81 @@
     transform: translateY(0);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
   }
-  video, canvas { display: none; }
+  /* New CSS for camera view */
+  #cameraView {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--bg);
+    z-index: 90;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+  }
+  #cameraView.active {
+    display: flex;
+    opacity: 1;
+  }
+  #cameraView video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  canvas { display: none; }
+
+  #cameraControls {
+    position: fixed; /* Changed to fixed position */
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    z-index: 91; /* Ensure controls are above the video */
+  }
+  #takePhotoBtn, #flashBtn {
+    background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+    border: none;
+    color: #fff;
+    padding: 15px; /* Adjust padding for icon */
+    font-size: 24px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+    width: 60px; /* Set a fixed size for the circular button */
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  #flashBtn {
+    background: none;
+    border: 2px solid var(--fg);
+    color: var(--fg);
+    font-size: 24px;
+    padding: 10px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+  }
 </style>
 </head>
 <body>
 
 <div id="toolbar">
   <button id="btnCamera" title="Enable Camera"><i class="fa-solid fa-camera"></i></button>
-  <button id="btnScan" title="Scan Text"><i class="fa-solid fa-qrcode"></i></button>
-  <button id="btnShuffle" title="Shuffle Words"><i class="fa-solid fa-shuffle"></i></button>
+  <button id="btnUploadImage" title="Upload Image"><i class="fa-solid fa-image"></i></button>
   <button id="btnPaste" title="Paste Text"><i class="fa-solid fa-clipboard"></i></button>
+  <button id="btnShuffle" title="Shuffle Words"><i class="fa-solid fa-shuffle"></i></button>
+  <button id="btnSpeech" title="Toggle Speech"><i class="fa-solid fa-volume-high"></i></button>
+  <button id="btnMode" title="Toggle Mode"><i class="fa-solid fa-spell-check"></i></button>
   <button id="btnClear" title="Clear"><i class="fa-solid fa-trash"></i></button>
 </div>
 
@@ -230,8 +309,15 @@
   </div>
 </div>
 
-<video id="video" autoplay playsinline></video>
+<div id="cameraView">
+  <video id="video" autoplay playsinline></video>
+  <div id="cameraControls">
+      <button id="takePhotoBtn"><i class="fa-solid fa-camera"></i></button>
+      <button id="flashBtn" title="Toggle Flash"><i class="fa-solid fa-bolt"></i></button>
+  </div>
+</div>
 <canvas id="canvas"></canvas>
+<input type="file" id="fileInput" accept="image/*" style="display: none;">
 
 <script>
 const video = document.getElementById('video');
@@ -241,28 +327,119 @@ const wordDisplay = document.getElementById('wordDisplay');
 const input = document.getElementById('typeInput');
 const statusBox = document.getElementById('status');
 const pasteModal = document.getElementById('pasteModal');
+const cameraView = document.getElementById('cameraView');
+const takePhotoBtn = document.getElementById('takePhotoBtn');
+const flashBtn = document.getElementById('flashBtn');
+const fileInput = document.getElementById('fileInput');
+const btnSpeech = document.getElementById('btnSpeech');
+const btnMode = document.getElementById('btnMode');
 
+const btnCamera = document.getElementById('btnCamera');
+const btnUploadImage = document.getElementById('btnUploadImage');
+const btnShuffle = document.getElementById('btnShuffle');
+const btnPaste = document.getElementById('btnPaste');
+const btnClear = document.getElementById('btnClear');
 const btnPrev = document.getElementById('btnPrev');
 const btnNext = document.getElementById('btnNext');
 
 let words = [];
 let index = 0;
+let stream = null;
+let flashEnabled = false;
+let isSpeechEnabled = true;
+let isLetterByLetter = false;
+
+// Speech synthesis setup
+const synth = window.speechSynthesis;
+const utterThis = new SpeechSynthesisUtterance();
+utterThis.lang = 'en-GB'; // Changed from 'en-US' to 'en-GB'
+
+function speak(text, delay = 0) {
+  if (!isSpeechEnabled) return;
+  if (synth.speaking) {
+    synth.cancel();
+  }
+  
+  if (delay > 0) {
+    setTimeout(() => {
+      utterThis.text = text;
+      synth.speak(utterThis);
+    }, delay);
+  } else {
+    utterThis.text = text;
+    synth.speak(utterThis);
+  }
+}
 
 function saveState() {
   localStorage.setItem('words', JSON.stringify(words));
   localStorage.setItem('index', index);
+  localStorage.setItem('isSpeechEnabled', isSpeechEnabled);
+  localStorage.setItem('isLetterByLetter', isLetterByLetter);
 }
 
 function loadState() {
   const savedWords = localStorage.getItem('words');
   const savedIndex = localStorage.getItem('index');
+  const savedSpeechState = localStorage.getItem('isSpeechEnabled');
+  const savedLetterByLetterState = localStorage.getItem('isLetterByLetter');
+  
   if (savedWords) {
     words = JSON.parse(savedWords);
   }
   if (savedIndex) {
     index = parseInt(savedIndex, 10);
   }
+  if (savedSpeechState !== null) {
+    isSpeechEnabled = savedSpeechState === 'true';
+    updateSpeechButtonIcon();
+  }
+  if (savedLetterByLetterState !== null) {
+    isLetterByLetter = savedLetterByLetterState === 'true';
+    updateModeButtonIcon();
+  }
 }
+
+function updateSpeechButtonIcon() {
+  const icon = btnSpeech.querySelector('i');
+  if (isSpeechEnabled) {
+    icon.classList.remove('fa-volume-xmark');
+    icon.classList.add('fa-volume-high');
+  } else {
+    icon.classList.remove('fa-volume-high');
+    icon.classList.add('fa-volume-xmark');
+  }
+}
+
+function updateModeButtonIcon() {
+  const icon = btnMode.querySelector('i');
+  if (isLetterByLetter) {
+    icon.classList.remove('fa-font');
+    icon.classList.add('fa-spell-check');
+  } else {
+    icon.classList.remove('fa-spell-check');
+    icon.classList.add('fa-font');
+  }
+  statusBox.textContent = `Mode is now: ${isLetterByLetter ? 'Letter-by-Letter' : 'Whole Word'}`;
+}
+
+// Toggle speech functionality
+btnSpeech.onclick = () => {
+  isSpeechEnabled = !isSpeechEnabled;
+  updateSpeechButtonIcon();
+  saveState();
+  if (synth.speaking) {
+    synth.cancel();
+  }
+  statusBox.textContent = `Text-to-speech is now ${isSpeechEnabled ? 'on' : 'off'}.`;
+};
+
+// Toggle mode functionality
+btnMode.onclick = () => {
+  isLetterByLetter = !isLetterByLetter;
+  updateModeButtonIcon();
+  saveState();
+};
 
 function updateStatus() {
   if (words.length > 0) {
@@ -295,60 +472,12 @@ function prevWord() {
   saveState();
 }
 
-input.addEventListener("input", () => {
-  if (!words.length) return;
-  const target = words[index];
-  const typed = input.value;
-
-  const targetLower = target.toLowerCase();
-  const typedLower = typed.toLowerCase();
-
-  let html = "";
-  for (let i = 0; i < target.length; i++) {
-    if (typedLower[i] == null) {
-      html += `<span>${target[i]}</span>`;
-    } else if (typedLower[i] === targetLower[i]) {
-      html += `<span class="correct">${target[i]}</span>`;
-    } else {
-      html += `<span class="wrong">${target[i]}</span>`;
-    }
-  }
-  wordDisplay.innerHTML = html;
-
-  if (typedLower === targetLower) {
-    input.value = "";
-    nextWord();
-  }
-});
-
-// Navigation button handlers
-btnPrev.onclick = prevWord;
-btnNext.onclick = nextWord;
-
-// Enable camera
-document.getElementById("btnCamera").onclick = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-    video.srcObject = stream;
-    statusBox.textContent = "Tap 'Scan' to begin.";
-  } catch {
-    statusBox.textContent = "Switch to HTTPS for camera.";
-  }
-};
-
-// Scan text
-document.getElementById("btnScan").onclick = async () => {
-  if (!video.srcObject) {
-    statusBox.textContent = "Please enable the camera first.";
-    return;
-  }
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.drawImage(video, 0, 0);
+// Function to perform OCR from a given image source
+async function performOCR(imageSource) {
   statusBox.textContent = "Scanning text...";
   try {
-    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-    const cleanText = text.replace(/[^a-zA-Z\s]/g, '');
+    const { data: { text } } = await Tesseract.recognize(imageSource, 'eng');
+    const cleanText = text.replace(/[^a-zA-Z\s]/g, '').trim();
     words = cleanText.split(/\s+/).filter(w => w.length > 2);
     index = 0;
     if (words.length) {
@@ -358,13 +487,162 @@ document.getElementById("btnScan").onclick = async () => {
     } else {
       statusBox.textContent = "No words were detected. Please try again.";
     }
-  } catch {
+  } catch (error) {
+    console.error(error);
     statusBox.textContent = "Text recognition failed. Please try again.";
+  }
+}
+
+input.addEventListener("input", (e) => {
+  if (!words.length) return;
+  const target = words[index];
+  const typed = input.value;
+  
+  // Speak single letter if in letter-by-letter mode
+  if (isSpeechEnabled && isLetterByLetter && e.data) {
+    speak(e.data);
+  }
+
+  const targetLower = target.toLowerCase();
+  const typedLower = typed.toLowerCase();
+
+  let html = "";
+  let wrongLetterFound = false;
+
+  for (let i = 0; i < target.length; i++) {
+    if (typedLower[i] == null) {
+      html += `<span>${target[i]}</span>`;
+    } else if (typedLower[i] === targetLower[i]) {
+      html += `<span class="correct">${target[i]}</span>`;
+    } else {
+      html += `<span class="wrong">${target[i]}</span>`;
+      wrongLetterFound = true;
+    }
+  }
+  wordDisplay.innerHTML = html;
+
+  if (wrongLetterFound) {
+    input.classList.add('shake');
+  } else {
+    input.classList.remove('shake');
+  }
+
+  if (typedLower === targetLower) {
+  if (isLetterByLetter) {
+  // Speak the last letter first
+  speak(target[target.length - 1]);
+  
+  // Dynamic delay: 300ms + 50ms per letter
+  const delay = 300 + target.length * 50;
+  
+  // Then speak the whole word
+  setTimeout(() => speak(target), delay);
+} else {
+  speak(target);
+}
+  input.value = "";
+  nextWord();
+  }
+});
+
+input.addEventListener('animationend', () => {
+    input.classList.remove('shake');
+});
+
+// Navigation button handlers
+btnPrev.onclick = prevWord;
+btnNext.onclick = nextWord;
+
+// Enable camera
+btnCamera.onclick = async () => {
+  try {
+    const constraints = { video: { facingMode: "environment" } };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    cameraView.classList.add('active'); // Show camera view
+    statusBox.textContent = "Aim camera at text and tap 'Take Photo'.";
+  } catch {
+    statusBox.textContent = "Camera access denied or unsupported. Switch to HTTPS.";
   }
 };
 
+// Toggle flash
+flashBtn.onclick = async () => {
+  if (!stream) {
+    statusBox.textContent = "Camera not enabled.";
+    return;
+  }
+  const track = stream.getVideoTracks()[0];
+  if (track) {
+    try {
+      const capabilities = track.getCapabilities();
+      if (capabilities.torch) {
+        flashEnabled = !flashEnabled;
+        await track.applyConstraints({
+          advanced: [{ torch: flashEnabled }]
+        });
+        flashBtn.style.backgroundColor = flashEnabled ? 'var(--accent)' : 'none';
+        flashBtn.style.color = flashEnabled ? '#fff' : 'var(--fg)';
+        statusBox.textContent = flashEnabled ? "Flashlight on." : "Flashlight off.";
+      } else {
+        statusBox.textContent = "Flashlight not supported.";
+      }
+    } catch (err) {
+      statusBox.textContent = "Failed to toggle flashlight.";
+    }
+  }
+};
+
+// Take a photo and scan text
+takePhotoBtn.onclick = async () => {
+  if (!stream) {
+    statusBox.textContent = "Please enable the camera first.";
+    return;
+  }
+  
+  // Set canvas dimensions to match video stream
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  
+  // Draw the last video frame to the canvas
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  
+  // Stop the video stream and release the camera
+  stream.getTracks().forEach(track => track.stop());
+  video.srcObject = null;
+  stream = null;
+  
+  cameraView.classList.remove('active'); // Hide camera view after scanning
+  
+  performOCR(canvas);
+};
+
+// Upload image button
+btnUploadImage.onclick = () => {
+  fileInput.click();
+};
+
+// Handle file input change
+fileInput.onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      performOCR(canvas);
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
 // Shuffle
-document.getElementById("btnShuffle").onclick = () => {
+btnShuffle.onclick = () => {
   if (!words.length) {
     statusBox.textContent = "No words to shuffle. Please load words first.";
     return;
@@ -380,7 +658,7 @@ document.getElementById("btnShuffle").onclick = () => {
 };
 
 // Paste text (open modal)
-document.getElementById("btnPaste").onclick = () => {
+btnPaste.onclick = () => {
   document.getElementById("pasteText").value = "";
   pasteModal.style.display = "flex";
 };
@@ -388,7 +666,7 @@ document.getElementById("btnPaste").onclick = () => {
 // Use pasted text
 document.getElementById("btnUsePasted").onclick = () => {
   const text = document.getElementById("pasteText").value;
-  const cleanText = text.replace(/[^a-zA-Z\s]/g, '');
+  const cleanText = text.replace(/[^a-zA-Z\s]/g, '').trim();
   words = cleanText.split(/\s+/).filter(w => w.length > 2);
   index = 0;
   showWord();
@@ -405,13 +683,18 @@ pasteModal.onclick = (e) => {
 };
 
 // Clear
-document.getElementById("btnClear").onclick = () => {
+btnClear.onclick = () => {
   words = [];
   index = 0;
   localStorage.removeItem('words');
   localStorage.removeItem('index');
   showWord();
   statusBox.textContent = "All words have been cleared.";
+  cameraView.classList.remove('active');
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
 };
 
 // Initial state
