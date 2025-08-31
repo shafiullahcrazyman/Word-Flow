@@ -11,10 +11,10 @@
 
 <link rel="icon" href="icon.png">
 
-<meta name="theme-color" content="#1d1932">
+<meta name="theme-color" content="#2b2f8a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="My Web App">
+<meta name="apple-mobile-web-app-title" content="Word Flow">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
@@ -49,8 +49,7 @@
     align-items: center;
     width: 100%;
     padding: 10px;
-    background: #282840;
-    border-bottom: 1px solid #4a4a6e;
+    background: var(--bg);
     flex-shrink: 0;
   }
   #toolbar button {
@@ -120,9 +119,8 @@
   #dock {
     display: flex;
     padding: 10px;
-    background: #282840;
+    background: var(--bg);
     width: 100%;
-    border-top: 1px solid #4a4a6e;
     flex-shrink: 0;
     align-items: center;
   }
@@ -250,7 +248,7 @@
     align-items: center;
     z-index: 91; /* Ensure controls are above the video */
   }
-  #takePhotoBtn, #flashBtn {
+  #takePhotoBtn {
     background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
     border: none;
     color: #fff;
@@ -267,7 +265,8 @@
     justify-content: center;
     align-items: center;
   }
-  #flashBtn {
+  /* MODIFIED: Combined style for flash and back buttons */
+  #flashBtn, #btnBackFromCamera {
     background: none;
     border: 2px solid var(--fg);
     color: var(--fg);
@@ -276,6 +275,10 @@
     width: 50px;
     height: 50px;
     border-radius: 50%;
+    cursor: pointer; /* ADDED */
+    display: flex; /* ADDED */
+    justify-content: center; /* ADDED */
+    align-items: center; /* ADDED */
   }
 </style>
 </head>
@@ -312,6 +315,7 @@
 <div id="cameraView">
   <video id="video" autoplay playsinline></video>
   <div id="cameraControls">
+      <button id="btnBackFromCamera" title="Go Back"><i class="fa-solid fa-chevron-left"></i></button>
       <button id="takePhotoBtn"><i class="fa-solid fa-camera"></i></button>
       <button id="flashBtn" title="Toggle Flash"><i class="fa-solid fa-bolt"></i></button>
   </div>
@@ -333,6 +337,7 @@ const flashBtn = document.getElementById('flashBtn');
 const fileInput = document.getElementById('fileInput');
 const btnSpeech = document.getElementById('btnSpeech');
 const btnMode = document.getElementById('btnMode');
+const btnBackFromCamera = document.getElementById('btnBackFromCamera'); // ADDED
 
 const btnCamera = document.getElementById('btnCamera');
 const btnUploadImage = document.getElementById('btnUploadImage');
@@ -352,7 +357,7 @@ let isLetterByLetter = false;
 // Speech synthesis setup
 const synth = window.speechSynthesis;
 const utterThis = new SpeechSynthesisUtterance();
-utterThis.lang = 'en-GB'; // Changed from 'en-US' to 'en-GB'
+utterThis.lang = 'en-GB';
 
 function speak(text, delay = 0) {
   if (!isSpeechEnabled) return;
@@ -498,7 +503,6 @@ input.addEventListener("input", (e) => {
   const target = words[index];
   const typed = input.value;
   
-  // Speak single letter if in letter-by-letter mode
   if (isSpeechEnabled && isLetterByLetter && e.data) {
     speak(e.data);
   }
@@ -523,19 +527,19 @@ input.addEventListener("input", (e) => {
 
   if (wrongLetterFound) {
     input.classList.add('shake');
+    if (navigator.vibrate) {
+      navigator.vibrate(200);
+    }
   } else {
     input.classList.remove('shake');
   }
 
   if (typedLower === targetLower) {
   if (isLetterByLetter) {
-  // Speak the last letter first
   speak(target[target.length - 1]);
   
-  // Dynamic delay: 300ms + 50ms per letter
   const delay = 300 + target.length * 50;
   
-  // Then speak the whole word
   setTimeout(() => speak(target), delay);
 } else {
   speak(target);
@@ -553,13 +557,24 @@ input.addEventListener('animationend', () => {
 btnPrev.onclick = prevWord;
 btnNext.onclick = nextWord;
 
+// --- ADDED: Function to close the camera view safely ---
+function closeCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+        stream = null;
+    }
+    cameraView.classList.remove('active');
+    statusBox.textContent = "Ready. Scan or paste text to begin.";
+}
+
 // Enable camera
 btnCamera.onclick = async () => {
   try {
     const constraints = { video: { facingMode: "environment" } };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
-    cameraView.classList.add('active'); // Show camera view
+    cameraView.classList.add('active');
     statusBox.textContent = "Aim camera at text and tap 'Take Photo'.";
   } catch {
     statusBox.textContent = "Camera access denied or unsupported. Switch to HTTPS.";
@@ -600,22 +615,18 @@ takePhotoBtn.onclick = async () => {
     return;
   }
   
-  // Set canvas dimensions to match video stream
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   
-  // Draw the last video frame to the canvas
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   
-  // Stop the video stream and release the camera
-  stream.getTracks().forEach(track => track.stop());
-  video.srcObject = null;
-  stream = null;
-  
-  cameraView.classList.remove('active'); // Hide camera view after scanning
+  closeCamera(); // Use the new function to clean up
   
   performOCR(canvas);
 };
+
+// ADDED: Back button functionality
+btnBackFromCamera.onclick = closeCamera;
 
 // Upload image button
 btnUploadImage.onclick = () => {
@@ -690,11 +701,7 @@ btnClear.onclick = () => {
   localStorage.removeItem('index');
   showWord();
   statusBox.textContent = "All words have been cleared.";
-  cameraView.classList.remove('active');
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    stream = null;
-  }
+  closeCamera(); // Use the new function to clean up
 };
 
 // Initial state
@@ -708,4 +715,3 @@ if (words.length > 0) {
 </script>
 </body>
 </html>
-
